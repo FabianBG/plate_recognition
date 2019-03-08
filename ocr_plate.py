@@ -149,7 +149,7 @@ def labels_to_text(labels):
         if c == len(alphabet):  # CTC Blank
             ret.append("")
         else:
-            ret.append(alphabet[c])
+            ret.append(chr(alphabet[c]))
     return "".join(ret)
     
 # Translation of characters to unique integer values
@@ -159,20 +159,7 @@ def text_to_labels(text):
         ret.append(alphabet.index(ord(char)))
     return ret
 
-# For a real OCR application, this should be beam search with a dictionary
-# and language model.  For this example, best path is sufficient.
-
-def decode_batch(test_func, word_batch):
-    out = test_func([word_batch])[0]
-    ret = []
-    for j in range(out.shape[0]):
-        out_best = list(np.argmax(out[j, 2:], 1))
-        out_best = [k for k, g in itertools.groupby(out_best)]
-        outstr = labels_to_text(out_best)
-        ret.append(outstr)
-    return ret
-
-    # the actual loss calc occurs here despite it not being
+# the actual loss calc occurs here despite it not being
 # an internal Keras loss function
 
 def ctc_lambda_func(args):
@@ -281,6 +268,16 @@ class VizCallback(keras.callbacks.Callback):
             os.path.join(self.output_dir, 'weights%02d.h5' % (epoch)))
 
 
+def decode_batch(test_func, word_batch):
+    out = test_func([word_batch])[0]
+    ret = []
+    for j in range(out.shape[0]):
+        out_best = list(np.argmax(out[j, 2:], 1))
+        out_best = [k for k, g in itertools.groupby(out_best)]
+        outstr = labels_to_text(out_best)
+        ret.append(outstr)
+    return ret
+
 if sys.argv[1] == "train":
     m, _ = model(image_chanels_size, len(alphabet) + 1, absolute_max_string_len) 
     viz_cb = VizCallback()
@@ -296,6 +293,6 @@ else:
     m.load_weights(weight_file)
 
     data, _ = image_generator(1, img_w=200, img_h=50, downsample_factor=4)
-    pred = test([data['the_input']])
-    print(np.array(pred).shape)
+    res = decode_batch(test, data['the_input'])
+    print(res)
 
