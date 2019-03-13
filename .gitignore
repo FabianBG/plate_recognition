@@ -10,7 +10,7 @@ __pycache__/
 *.h5
 
 image_ocr/*
-plate-test/*
+plate-test/*.h5
 
 # Distribution / packaging
 .Python
