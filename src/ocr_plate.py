@@ -14,7 +14,6 @@ import re
 import datetime
 import cairocffi as cairo
 import editdistance
-import numpy as np
 from scipy import ndimage
 
 from keras import backend as K
@@ -85,13 +84,15 @@ def random_plate():
     return letter + "-" + number
 
 
-def get_plate(size, empty=False):
+def get_plate(size, empty=False, show_plate=False, save_plate=""):
     plate = random_plate()
     font = ImageFont.truetype(font_path, 30)
     img = Image.new('RGB', size, (0,0,0))
     draw = ImageDraw.Draw(img)
     rounded_rectangle(draw, ((0, 0), size), 20, fill=(255, 255, 255), outline=(255, 255, 255))
     draw.text((25,10), plate, font=font, fill=(0,0,0))
+    if show_plate: img.show()
+    if save_plate is not empty: img.save(os.path.join(save_plate, plate + '.jpg'))
     img = np.array(img.convert('L'))
     img = img.astype(np.float32) / 255
     img = np.expand_dims(img, 0)
@@ -99,7 +100,7 @@ def get_plate(size, empty=False):
 
 
 
-def image_generator(size, img_w, img_h, downsample_factor):
+def image_generator(size, img_w, img_h, downsample_factor, show_image=False):
     if K.image_data_format() == 'channels_first':
         X_data = np.ones([size, 1, img_w, img_h])
     else:
@@ -109,7 +110,7 @@ def image_generator(size, img_w, img_h, downsample_factor):
     label_length = np.zeros([size, 1])
     source_str = []
     for i in range(size):
-        data, world = get_plate(image_size, True)
+        data, world = get_plate(image_size, True, show_plate=show_image)
         if K.image_data_format() == 'channels_first':
             X_data[i, 0, 0:img_w, :] = np.array(data).T
         else:
@@ -119,12 +120,13 @@ def image_generator(size, img_w, img_h, downsample_factor):
         input_length[i] = img_w // downsample_factor - 2
         label_length[i] = [len(world)]
         source_str.append(world)
-    inputs = {'input': X_data,
-                'labels': labels,
-                'input_length': input_length,
-                'label_length': label_length,
-                'source_str': source_str
-                }
+    inputs = {
+        'input': X_data,
+        'labels': labels,
+        'input_length': input_length,
+        'label_length': label_length,
+        'source_str': source_str,
+        }
     outputs = {'ctc': np.zeros([size])}
     return (inputs, outputs)
 
@@ -209,11 +211,13 @@ def model(input_shape, output_shape, absolute_max_string_len):
     test_func = K.function([input_data], [y_pred])
     sgd = SGD(lr=0.02, decay=1e-6, momentum=0.9, nesterov=True, clipnorm=5)
     model = Model(inputs=[input_data, labels, input_length, label_length],
-                  outputs=loss_out)
-    model.compile(loss={'ctc': lambda y_true, y_pred: y_pred}, optimizer=sgd)
+                  outputs=[loss_out, y_pred])
+    model.compile(loss={'ctc': ctc, 'ctc': ctc}, optimizer=sgd)
 
     return model, test_func
 
+def ctc(y_true, y_pred): 
+    return y_pred
 
 def batch_generator(size):
     while 1:
